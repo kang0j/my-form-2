@@ -1043,9 +1043,10 @@ button.primary:disabled {
 }
 
 .question-block {
-  /* 자동 이동이 이 문항을 화면 위에 세울 때 남길 숨 — 붙여 세우면 앞
-     문항이 잘린 것처럼 보인다(§VoteFlow 자동 이동). */
-  scroll-margin-top: var(--space-4);
+  /* 자동 이동이 이 문항을 화면 위에 세울 때 남길 숨. 1rem 으로는 제목 윗
+     선이 화면 가장자리에 닿아 잘린 것처럼 보였다 — 한 계단 더 띄운다
+     (§VoteFlow 자동 이동). */
+  scroll-margin-top: var(--space-6);
   /* 문항 사이 여백이 곧 구분선이다 — 화면 한 장에 여러 문항이 놓여도
      선이나 카드를 새로 들이지 않는다(§DESIGN Don't: 카드). 마지막 문항
      아래 여백은 .question-screen 의 padding-bottom 이 맡는다. */
