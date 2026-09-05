@@ -1,0 +1,8 @@
+# 정적 자산은 Worker 를 거치지 않고 나가므로(wrangler.jsonc §run_worker_first
+# 는 /api/* 와 /s/* 뿐), 검색 차단 헤더는 여기서 건다. Cloudflare Workers 의
+# 자산 서버가 이 파일을 읽어 모든 응답에 헤더를 얹는다.
+#
+# meta 태그만으로는 HTML 을 파싱하는 크롤러에만 닿는다 — 헤더는 CSV·JSON·
+# 폰트까지 전부 덮고, 자바스크립트를 돌리지 않는 크롤러에도 그대로 닿는다.
+/*
+  X-Robots-Tag: noindex, nofollow, noarchive

@@ -1,0 +1,22 @@
+-- 「실시간」 결과 공개를 없앤다.
+--
+-- 마감 전에는 관리자에게도 집계를 주지 않기로 했다(§ResultsVisibility). 진행
+-- 중에 집계를 두 번 읽으면 그 사이 들어온 한 표가 델타로 드러나고, 참가자
+-- 화면의 제출 시각이 그 한 표에 이름을 붙인다. answers 에 시각 컬럼을 두지
+-- 않은 것(§0001_init.sql)이 막으려던 대조를, 살아 있는 API 를 반복 호출하는
+-- 것이 그대로 되살린다.
+--
+-- 'realtime' 으로 열어 두었던 설문은 「마감 후 모두에게」로 옮긴다. 그 설문을
+-- 고른 관리자의 뜻은 "모두가 본다"였고, 이제 그 시점이 마감 뒤로 밀릴 뿐이다.
+UPDATE surveys SET results_visibility = 'after_close' WHERE results_visibility = 'realtime';
+
+-- CHECK 제약(0001_init.sql)에서 'realtime' 을 빼지 않는다.
+--
+-- SQLite 는 CHECK 를 고치려면 표를 통째로 다시 만들어야 하는데, surveys 는
+-- questions·participants·submissions 가 전부 ON DELETE CASCADE 로 매달린
+-- 뿌리다. 재작성 도중 옛 표를 DROP 하는 순간 이미 제출된 응답과 명부가 함께
+-- 지워진다. 제약 문구 하나를 다듬자고 데이터를 위험에 두지 않는다.
+--
+-- 대신 쓰기는 전부 Zod enum(surveyDraftSchema·visibilitySchema) 한 곳을
+-- 지나며, 그 enum 에는 'realtime' 이 없다. 남은 CHECK 는 더 넓을 뿐 틀리지
+-- 않는다.

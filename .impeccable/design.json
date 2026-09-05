@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-03T09:00:00Z",
+  "title": "Design System: 익명 투표",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "primary",
+        "displayName": "검정",
+        "canonical": "#0a0a0a",
+        "tonalRamp": ["#0a0a0a"],
+        "note": "투표 세계 바탕. 상수 — 문항을 넘겨도 움직이지 않는다. --paper-ink 와 같은 값."
+      },
+      "ink": {
+        "role": "primary",
+        "displayName": "바랜 종이 흰색",
+        "canonical": "#f5f2e8",
+        "tonalRamp": ["#f5f2e8"],
+        "note": "투표 세계 잉크. 순백이 아니다 — 어두운 방의 글레어를 피하려 바랜 톤을 골랐다. --paper 와 같은 값."
+      },
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "잉크 0.78 (투표 세계 보조)",
+        "canonical": "rgb(245 242 232 / 0.78)",
+        "tonalRamp": ["rgb(245 242 232 / 0.78)"],
+        "note": "회색을 섞지 않는다 — 같은 잉크의 불투명도 계단. --ink-ui 와 값이 동일한 별칭 토큰."
+      },
+      "paper": {
+        "role": "primary",
+        "displayName": "바랜 종이 흰색",
+        "canonical": "#f5f2e8",
+        "tonalRamp": ["#f5f2e8"],
+        "note": "종이(관리자·결과) 세계 바탕. --ink 와 같은 값 — 두 세계가 같은 두 순색을 반전해서 쓴다."
+      },
+      "paper-ink": {
+        "role": "primary",
+        "displayName": "검정",
+        "canonical": "#0a0a0a",
+        "tonalRamp": ["#0a0a0a"],
+        "note": "종이 세계 잉크. --ground 와 같은 값."
+      },
+      "paper-ink-secondary": {
+        "role": "neutral",
+        "displayName": "잉크 0.85 (종이 세계 보조)",
+        "canonical": "rgb(10 10 10 / 0.85)",
+        "tonalRamp": ["rgb(10 10 10 / 0.85)"]
+      },
+      "paper-ink-boundary": {
+        "role": "neutral",
+        "displayName": "잉크 0.7 (UI 경계 전용, 비텍스트)",
+        "canonical": "rgb(10 10 10 / 0.7)",
+        "tonalRamp": ["rgb(10 10 10 / 0.7)"],
+        "note": "구 이름 --paper-ink-030. 값이 3:1 바닥을 채우도록 올라간 뒤 값에 맞춰 개명."
+      },
+      "paper-ink-012": {
+        "role": "neutral",
+        "displayName": "잉크 0.12 (순수 장식 헤어라인)",
+        "canonical": "rgb(10 10 10 / 0.12)",
+        "tonalRamp": ["rgb(10 10 10 / 0.12)"],
+        "note": "대비 1.30:1 — 텍스트 금지, 표/목록 구분선 전용."
+      },
+      "paper-danger": {
+        "role": "accent",
+        "displayName": "자주 (유일한 색상 강조)",
+        "canonical": "#7a1f3d",
+        "tonalRamp": ["#7a1f3d"],
+        "note": "관리자 점검 화면 정합성 경보 + 일반 오류 문구가 공유하는 시스템 유일의 색상 강조."
+      }
+    },
+    "typographyMeta": {
+      "fs-hero": { "displayName": "Hero", "purpose": "투표 표지 설문 제목 전용." },
+      "fs-question": { "displayName": "Question", "purpose": "문항 제목(legend), 검토 화면 제목 — 한 장의 벽보 헤드라인." },
+      "fs-counter": { "displayName": "Counter", "purpose": "상단 진행 카운터(n / 총 문항수) 전용 — 사라진 진행-색을 대신 나른다." },
+      "fs-option": { "displayName": "Option", "purpose": "보기 라벨, 랭킹 라벨, 검토 답변 — 굵기로 선택 여부가 갈린다." },
+      "fs-body": { "displayName": "Body", "purpose": "설명문, 본문 문단." },
+      "fs-meta": { "displayName": "Meta", "purpose": "상태 라벨, 메타 정보." },
+      "fs-small": { "displayName": "Small", "purpose": "필드 라벨, 힌트, 랭킹 이동 버튼." },
+      "h1-paper": { "displayName": "H1 (종이 세계)", "purpose": "관리자·결과 화면 최상위 제목." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "ease-signature", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "진입 애니메이션(enter-up/enter-down)의 유일한 이징 — 시스템 전체에서 이 하나만 쓴다." },
+      { "name": "dur-enter", "value": "560ms", "purpose": "진입 애니메이션 재생 시간." },
+      { "name": "dur-quick", "value": "220ms", "purpose": "hover/active/포커스 등 즉각 반응하는 transition." },
+      { "name": "stagger-step", "value": "28ms", "purpose": "enter-item 요소들의 계단식 지연 단위 (--enter-index * 28ms)." },
+      { "name": "enter-shift", "value": "22px", "purpose": "진입 애니메이션의 이동 거리 (앞으로: 아래→위, 뒤로: 위→아래)." }
+    ],
+    "breakpoints": [
+      { "name": "container-widen", "value": "48rem", "purpose": "투표 세계 padding이 콘텐츠 폭을 40rem 근처로 눌러주는 시점." },
+      { "name": "audit-table-collapse", "value": "30em (max-width)", "purpose": "관리자 명부 표가 표에서 쌓인 카드형 목록으로 접히는 시점." }
+    ]
+  },
+  "components": [
+    {
+      "name": "옵션 행 (선택형 문항)",
+      "kind": "custom",
+      "refersTo": "option-row",
+      "description": "카드가 아닌 목록의 한 줄. 선택 표시는 굵기·불투명도로만.",
+      "html": "<ol class=\"ds-option-list\"><li class=\"ds-option-row ds-option-row--selected\"><span class=\"ds-option-row__index\">1</span><label class=\"ds-option-row__control\" for=\"opt1\"><input id=\"opt1\" class=\"ds-option-row__input\" type=\"radio\" name=\"q\" checked /><span class=\"ds-option-row__label\">회장 후보 A</span></label></li><li class=\"ds-option-row\"><span class=\"ds-option-row__index\">2</span><label class=\"ds-option-row__control\" for=\"opt2\"><input id=\"opt2\" class=\"ds-option-row__input\" type=\"radio\" name=\"q\" /><span class=\"ds-option-row__label\">회장 후보 B</span></label></li></ol>",
+      "css": ".ds-option-list{list-style:none;margin:0;padding:0;background:#0a0a0a;color:#f5f2e8;font-family:'Wanted Sans',system-ui,sans-serif}.ds-option-row{display:flex;align-items:baseline;gap:.75rem;margin:0;padding:1.5rem 0}.ds-option-row__control{display:block;flex:1;background:transparent;border:0;text-align:left;cursor:pointer}.ds-option-row__input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.ds-option-row__index{color:rgba(245,242,232,.78);font-size:.8125rem;min-width:1.4em}.ds-option-row__label{font-size:clamp(1.05rem,4.2vw,1.3rem);font-weight:400;opacity:.78;transition:opacity .22s ease-out,font-weight .22s ease-out}.ds-option-row--selected .ds-option-row__label{font-weight:800;opacity:1}.ds-option-row--selected .ds-option-row__index{color:#f5f2e8}"
+    },
+    {
+      "name": "주 버튼 (투표 세계)",
+      "kind": "button",
+      "refersTo": "button-primary-vote",
+      "description": "잉크로 채우고 글자는 바탕색으로 뚫는 폭 100% 버튼.",
+      "html": "<button class=\"ds-btn-primary-vote\">시작하기</button>",
+      "css": ".ds-btn-primary-vote{flex:1;display:block;width:100%;background:#f5f2e8;color:#0a0a0a;border:0;border-radius:2px;font-family:'Wanted Sans',system-ui,sans-serif;font-weight:700;font-size:max(1.0625rem,16px);padding:1rem 1.5rem;cursor:pointer;transition:opacity .22s ease-out,transform .22s ease-out}.ds-btn-primary-vote:active{transform:scale(.985);opacity:.88}.ds-btn-primary-vote:disabled{opacity:.35;cursor:not-allowed}"
+    },
+    {
+      "name": "보조 버튼 (투표 세계, ghost)",
+      "kind": "button",
+      "refersTo": "button-ghost-vote",
+      "description": "배경 없이 잉크색 텍스트만, 0.78 불투명도.",
+      "html": "<button class=\"ds-btn-ghost-vote\">뒤로</button>",
+      "css": ".ds-btn-ghost-vote{background:transparent;border:0;color:#f5f2e8;opacity:.78;font-family:'Wanted Sans',system-ui,sans-serif;font-size:max(1rem,16px);padding:.75rem .5rem;cursor:pointer;transition:opacity .22s ease-out}.ds-btn-ghost-vote:hover,.ds-btn-ghost-vote:focus-visible{opacity:1}.ds-btn-ghost-vote:active{opacity:.4}"
+    },
+    {
+      "name": "밑줄 입력란 (투표 세계)",
+      "kind": "input",
+      "refersTo": "field-input-vote",
+      "description": "박스가 아니라 밑줄 하나뿐인 입력란. 포커스는 밑줄 색 변화로 표시.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field__label\" for=\"name\">이름</label><input id=\"name\" class=\"ds-field__input\" type=\"text\" /></div>",
+      "css": ".ds-field{max-width:26rem;font-family:'Wanted Sans',system-ui,sans-serif}.ds-field__label{display:block;font-size:.8125rem;color:rgba(245,242,232,.78);margin-bottom:.5rem}.ds-field__input{display:block;width:100%;font-size:max(1.125rem,16px);color:#f5f2e8;background:transparent;border:0;border-bottom:1px solid rgba(245,242,232,.78);border-radius:0;padding:.5rem 0;transition:border-color .22s ease-out}.ds-field__input:focus-visible{outline:none;border-bottom-color:#f5f2e8}"
+    },
+    {
+      "name": "박스형 입력란 (종이 세계)",
+      "kind": "input",
+      "refersTo": "input-paper",
+      "description": "관리자 편집 폼용 상자형 입력란.",
+      "html": "<input class=\"ds-input-paper\" type=\"text\" placeholder=\"설문 제목\" />",
+      "css": ".ds-input-paper{width:100%;font-size:max(1rem,16px);font-family:'Wanted Sans',system-ui,sans-serif;padding:.5rem .75rem;border:1px solid rgba(10,10,10,.7);border-radius:4px;background:#f5f2e8;color:#0a0a0a}"
+    },
+    {
+      "name": "진행 카운터",
+      "kind": "custom",
+      "refersTo": "status-row__progress",
+      "description": "「n / 총 문항수」 — 사라진 바탕색 진행을 대신 나르는, 시스템에서 가장 큰 상태 표시.",
+      "html": "<div class=\"ds-status-row\"><span>투표 중</span><span class=\"ds-status-row__progress\">3 / 7</span></div>",
+      "css": ".ds-status-row{display:flex;align-items:baseline;justify-content:space-between;gap:.75rem;font-size:.875rem;color:rgba(245,242,232,.78);font-family:'Wanted Sans',system-ui,sans-serif}.ds-status-row__progress{font-weight:900;font-size:clamp(1.75rem,6.5vw,2.75rem);line-height:1;letter-spacing:-.02em;color:#f5f2e8;font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "결과 득표 행 (크기=득표)",
+      "kind": "custom",
+      "refersTo": "choice-result-row",
+      "description": "1위 대비 득표 비율이 글자 크기를, 전체 대비 득표 비율이 막대 너비를 정한다. 각진 필드, 반올림 프로그레스바 아님.",
+      "html": "<li class=\"ds-choice-result-row\" style=\"--mag:1;--share:0.62\"><div class=\"ds-choice-result-row__head\"><p class=\"ds-choice-result-row__label\">후보 A</p><strong class=\"ds-choice-result-row__count\">18명</strong></div><div class=\"ds-choice-result-row__field\"></div></li>",
+      "css": ".ds-choice-result-row{padding:.75rem 0 1rem;border-bottom:1px solid rgba(10,10,10,.12);font-family:'Wanted Sans',system-ui,sans-serif;list-style:none}.ds-choice-result-row__head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:.5rem 1rem;margin-bottom:.5rem}.ds-choice-result-row__label{font-weight:900;letter-spacing:-.02em;line-height:1.08;margin:0;font-size:clamp(1.05rem,calc(1rem + var(--mag,0) * 5vw),2.6rem);color:#0a0a0a}.ds-choice-result-row__count{font-variant-numeric:tabular-nums;font-weight:700;color:rgba(10,10,10,.85)}.ds-choice-result-row__field{height:.85rem;background:#0a0a0a;border-radius:0;width:calc(var(--share,0) * 100%)}"
+    },
+    {
+      "name": "랭킹 행 (드래그=숫자 자체)",
+      "kind": "custom",
+      "refersTo": "ranking-row",
+      "description": "손잡이 아이콘 없음 — 순위 숫자 자체가 드래그 핸들. 이동은 텍스트 버튼.",
+      "html": "<li class=\"ds-ranking-row\"><span class=\"ds-ranking-row__rank\" aria-label=\"후보 A 드래그로 순서 변경, 현재 1번째\">1</span><span class=\"ds-ranking-row__label\">후보 A</span><span class=\"ds-ranking-row__moves\"><button type=\"button\" class=\"ds-ranking-row__move\" aria-label=\"후보 A 위로\" disabled>위로</button><button type=\"button\" class=\"ds-ranking-row__move\" aria-label=\"후보 A 아래로\">아래로</button></span></li>",
+      "css": ".ds-ranking-row{display:flex;align-items:center;gap:.75rem;padding:1rem 0;font-family:'Wanted Sans',system-ui,sans-serif;list-style:none;color:#f5f2e8}.ds-ranking-row__rank{font-size:1.15rem;min-width:1.6em;padding:.5rem .5rem .5rem 0;color:#f5f2e8;cursor:grab;touch-action:none;font-weight:900}.ds-ranking-row__rank:active{cursor:grabbing;opacity:.7}.ds-ranking-row__label{flex:1;font-size:clamp(1.05rem,4.2vw,1.3rem);font-weight:700}.ds-ranking-row__moves{display:flex;gap:.25rem}.ds-ranking-row__move{border:0;background:transparent;color:#f5f2e8;padding:.5rem .75rem;font-size:.8125rem;font-weight:700;line-height:1;white-space:nowrap}.ds-ranking-row__move:disabled{opacity:.25}.ds-ranking-row__move:hover:not(:disabled){opacity:.8}.ds-ranking-row__move:active:not(:disabled){opacity:.6}"
+    }
+  ],
+  "narrative": {
+    "northStar": "벽보(포스터) 문법의 투표용지",
+    "overview": "투표용지는 본래 이름의 목록이고, 축제 라인업 벽보는 그 목록을 크기만으로 읽히게 만드는 형식이다. 이 앱은 그 두 형식을 겹친다 — 한 문항이 한 장의 벽보이고, 넘길 때마다 화면이 바뀐다. 스크롤로 쭉 이어지는 카드 목록형 설문지, 사각 테두리로 문항을 가두는 폼 빌더의 문법을 명시적으로 거부한다. 카드도, 박스도, 아이콘도, 그림자도 없다. 두 세계가 이 문법을 나눠 쓴다 — 투표 세계는 화면 전체가 검정이고 잉크는 바랜 종이색 하나뿐이며, 관리자·결과 세계는 같은 잉크·바탕 짝을 반전해서 쓴다. 색은 원래 진행도 날랐지만, 사용자가 팔레트를 검정으로 재지정한 뒤로는 바탕이 상수가 되고 문항 번호의 타이포그래피 스케일이 그 자리를 대신 이어받았다.",
+    "keyCharacteristics": [
+      "카드·박스·테두리·구분선·아이콘·일러스트가 투표 세계에 전혀 없다. 위계는 전부 굵기·크기·불투명도로만 만든다.",
+      "잉크는 세계당 정확히 하나(순색)이고, 약한 정보는 그 잉크의 불투명도 단계로만 표현한다 — 회색을 별도로 섞지 않는다.",
+      "색상 강조는 시스템 전체에 단 하나, 관리자 점검 화면의 정합성 경보와 일반 오류 문구가 공유하는 자주색(--paper-danger)뿐이다.",
+      "서체는 Wanted Sans 하나. 위계는 굵기·크기·줄바꿈으로만 만든다.",
+      "진행은 색이 아니라 문항 번호의 타이포그래피 스케일이 짊어진다.",
+      "선택 표시는 아이콘이 아니라 타이포그래피 자체다 — 고른 항목은 굵어지고 커지며, 나머지는 흐려진다."
+    ],
+    "rules": [
+      { "name": "The One Ink Rule", "body": "세계마다 잉크는 정확히 하나다. 약한 정보는 별도의 회색이 아니라 그 잉크의 불투명도(투표 세계 0.78, 종이 세계 0.85)로만 표현한다.", "section": "colors" },
+      { "name": "The One Alarm Rule", "body": "색상 강조는 시스템 전체에 --paper-danger 하나뿐이다. 새 화면에 두 번째 강조색을 들이지 않는다.", "section": "colors" },
+      { "name": "The Weight-Is-The-Mark Rule", "body": "선택 표시는 아이콘이 아니라 타이포그래피 자체다 — 고른 보기는 굵기 800·불투명도 1로, 나머지는 400·0.78로 남는다.", "section": "typography" },
+      { "name": "The Size-Carries-Emphasis Rule", "body": "결과 화면에서 크기 자체가 득표율이다 — 막대 그래프의 축이 아니라 활자 크기가 데이터를 나른다.", "section": "typography" },
+      { "name": "The No-Wrapper Rule", "body": "새 화면에 별도의 max-width 카드나 중앙 정렬 wrapper를 만들지 않는다. 컨테이너 제어는 main의 max-width(종이 세계) 또는 --inset-x + 48rem 미디어 쿼리(투표 세계) 둘 중 하나로 충분해야 한다.", "section": "layout" },
+      { "name": "The Flat-Forever Rule", "body": "box-shadow, filter: drop-shadow, backdrop-filter 어느 것도 이 시스템에 없다. 새 컴포넌트에 깊이가 필요해도 그림자로 해결하지 않는다.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do 잉크는 세계당 하나. 약한 정보는 그 잉크의 불투명도 계단(0.12/0.7/0.78/0.85)으로만 표현한다.",
+      "Do 위계는 크기·굵기·줄바꿈으로 만든다. 새 텍스트 요소를 추가할 때는 먼저 기존 --fs-* 토큰 중 맞는 것을 골라 쓴다.",
+      "Do 투표 세계에 새 행 목록을 추가할 때는 padding만으로 구분한다(--space-4~--space-5 세로 padding).",
+      "Do 종이 세계에서 표·목록의 행 구분이 필요하면 1px solid var(--paper-ink-012) 헤어라인만 쓴다(장식 전용).",
+      "Do 선택 상태는 굵기 상승(대략 400→800)과 불투명도 상승으로 표현한다.",
+      "Do 상호작용 요소에 시각 텍스트가 라벨로 부족하면 aria-label로 보완한다.",
+      "Do 새 입력 요소의 폰트 크기를 max(원하는 값, 16px)로 고정해 iOS 자동 확대를 막는다.",
+      "Do prefers-reduced-motion: reduce에서 모든 .enter-item 애니메이션과 주요 transition을 끈다."
+    ],
+    "donts": [
+      "Don't 투표 세계에 카드, 박스, 테두리, 구분선, 그림자, 둥근 큰 반경을 들이지 않는다.",
+      "Don't 이미지·일러스트·아이콘 자산(SVG, 아이콘 폰트, 유니코드 글리프 손잡이/화살표 포함)을 쓰지 않는다.",
+      "Don't 회색을 새로 섞지 않는다. 약한 텍스트가 필요하면 그 세계의 단일 잉크에 불투명도만 낮춘다.",
+      "Don't 두 번째 강조색을 들이지 않는다.",
+      "Don't 진행 표시를 다시 색(바탕 전환)으로 되돌리지 않는다.",
+      "Don't 100vh만으로 전체 높이를 고정하지 않는다.",
+      "Don't 16px 미만 입력 폰트 크기를 쓰지 않는다.",
+      "Don't 웹폰트를 CDN에서 부르지 않는다."
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.superpowers/
+
+# 리뷰 도구가 남기는 스크린샷 — 결과물이 아니라 작업 흔적이다.
+.impeccable/review/
+
+# 마크다운은 README 하나만 올린다. 설계 노트(DESIGN·PRODUCT)와
+# docs/ 아래 스펙·계획은 작업 기록이지 배포물이 아니다.
+*.md
+!README.md
+docs/
