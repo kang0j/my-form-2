@@ -15,8 +15,11 @@ import {
   hasSubmitted,
   loadDraft,
   markSubmitted,
+  rememberSubmittedIds,
   saveDraft,
+  submittedIds,
 } from '../storage'
+import { ResponseReceipt } from './ResponseReceipt'
 import { ChoiceQuestion } from './ChoiceQuestion'
 import { RankingQuestion } from './RankingQuestion'
 import { TextQuestion } from './TextQuestion'
@@ -297,6 +300,12 @@ export function VoteFlow() {
   const [problems, setProblems] = useState<Record<string, string>>({})
   const [submitErrors, setSubmitErrors] = useState<string[]>([])
   const [duplicateIdentity, setDuplicateIdentity] = useState(false)
+  // 이 기기가 이 설문에 낸 응답 ID. 완료·재방문·마감 어느 화면에서든 이
+  // 값이 있으면 영수증이 선다.
+  const [receiptIds, setReceiptIds] = useState<string[]>([])
+  // 지금 갈아 끼우는 중인 응답. null 이면 새로 내는 중이다. 이 값이 있으면
+  // 제출이 새 행을 만들지 않고 그 응답의 답만 바꾼다(§replaceSubmission).
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   // 표지의 허용 명단 조회 상태. 제출(sending)과 따로 두는 이유는 두 버튼이
   // 서로 다른 화면에 있고 라벨도 다르기 때문이다.
@@ -348,6 +357,46 @@ export function VoteFlow() {
       })
       .catch((error: Error) => {
         if (!cancelled) setLoadError(error.message)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [surveyId])
+
+  /**
+   * 이 기기의 영수증을 챙긴다.
+   *
+   * 보통은 기기에 적혀 있다 — 제출할 때 받아 두기 때문이다. 이 기능이 생기기
+   * 전에 낸 기기에는 "냈다"는 표시만 있고 번호가 없어서, 그때만 브라우저 키를
+   * 들고 서버에 되묻는다(§/receipts). 기기에 적힌 값이 있으면 그쪽이 언제나
+   * 옳다 — 공용 노트북에서 「추가 제출」로 넘긴 앞사람의 번호까지 끌어오지
+   * 않기 위해서다.
+   *
+   * 설문이 열렸는지 닫혔는지는 보지 않는다. 마감된 설문에서도 자기가 낸
+   * 번호는 확인할 수 있어야 한다.
+   */
+  useEffect(() => {
+    if (!surveyId || !hasSubmitted(surveyId)) return
+
+    const known = submittedIds(surveyId)
+    if (known.length > 0) {
+      setReceiptIds(known)
+      return
+    }
+
+    let cancelled = false
+
+    apiSend<{ submissionIds: string[] }>(`/api/surveys/${surveyId}/receipts`, 'POST', {
+      browserKey: getBrowserKey(),
+    })
+      .then(({ submissionIds }) => {
+        if (cancelled || submissionIds.length === 0) return
+        rememberSubmittedIds(surveyId, submissionIds)
+        setReceiptIds(submissionIds)
+      })
+      .catch(() => {
+        // 영수증은 덤이다. 못 되살려도 화면은 그대로 선다.
       })
 
     return () => {
@@ -564,6 +613,9 @@ export function VoteFlow() {
         studentId: draft.studentId.trim(),
         browserKey: getBrowserKey(),
         answers: buildAnswers(survey, draft),
+        // 수정 중이면 어느 응답을 갈아 끼우는지 함께 보낸다. 서버는 이 값이
+        // 붙어 있을 때만 새 행 대신 그 행을 고친다.
+        ...(editingId ? { replaces: editingId } : {}),
       }
 
       const validation = validateSubmission(survey, payload)
@@ -591,12 +643,18 @@ export function VoteFlow() {
       setSubmitErrors([])
       setSending(true)
       try {
-        const result = await apiSend<{ ok: true; duplicateIdentity: boolean }>(
-          `/api/surveys/${surveyId}/submit`,
-          'POST',
-          payload,
-        )
-        markSubmitted(surveyId)
+        const result = await apiSend<{
+          ok: true
+          duplicateIdentity: boolean
+          submissionId?: string
+        }>(`/api/surveys/${surveyId}/submit`, 'POST', payload)
+
+        // 수정은 응답 ID 를 바꾸지 않는다 — 들고 있던 영수증이 그대로 그
+        // 응답을 가리켜야 한다. 그래서 기기에 적힌 목록도 손대지 않는다.
+        if (!editingId) {
+          markSubmitted(surveyId, result.submissionId)
+          setReceiptIds(result.submissionId ? [result.submissionId] : [])
+        }
         clearDraft(surveyId)
         setDuplicateIdentity(result.duplicateIdentity)
         setStep('done')
@@ -745,6 +803,10 @@ export function VoteFlow() {
             {survey.status === 'closed' ? '마감된 설문이에요.' : '아직 열리지 않은 설문이에요.'}
           </p>
           {resultsLink}
+          {/* 마감된 뒤에도 자기가 낸 번호는 확인할 수 있다. 다만 고칠 수는
+              없다 — 「응답 수정」은 열려 있는 설문에서만 서므로 여기서는
+              영수증만 놓는다. */}
+          <ResponseReceipt ids={receiptIds} />
         </div>
       </div>
     )
@@ -753,27 +815,69 @@ export function VoteFlow() {
   // ---- 이미 제출한 기기 --------------------------------------------
 
   if (step === 'revisit') {
+    // 「응답 수정」은 고칠 대상이 하나로 정해질 때만 버튼 자리에 선다. 여러
+    // 개가 남아 있는 기기(예전에 「추가 제출」로 여러 명이 낸 공용 노트북)는
+    // 어느 것을 고칠지 사람이 골라야 하므로, 그 선택을 영수증 목록 쪽으로
+    // 넘기고 여기서는 「추가 제출」만 남긴다.
+    const editable = receiptIds.length === 1 ? receiptIds[0] : null
+
+    const startEditing = (id: string) => {
+      setEditingId(id)
+      // 기존 답은 보여주지 않는다. 고치는 사람이 앞의 답을 다시 보게 되면
+      // 그 자리에 남의 답이 떠 있을 수 있고(공용 기기), 무엇보다 이 화면은
+      // 처음 낼 때와 같은 백지여야 "새로 적어 낸 것이 그대로 대체된다"는
+      // 사실과 어긋나지 않는다.
+      clearDraft(surveyId)
+      setDraft(emptyDraft(survey))
+      setProblems({})
+      setSubmitErrors([])
+      setIntroProblem(null)
+      setDirection('forward')
+      setStep('intro')
+    }
+
     return (
       <div className="vote-world">
         <div className="status-screen" ref={screenRef} tabIndex={-1}>
           <h1 className="status-screen__title">{survey.title}</h1>
           <p className="status-screen__notice">이미 제출했어요.</p>
+
           <p className="status-screen__body">
-            한 기기를 여러 명이 함께 쓰고 있다면 아래 버튼으로 이어서 제출할 수 있어요. 단,
-            같은 기기에서의 추가 제출은 투표 결과 화면에 기기 중복으로 표시돼요.
+            낸 답을 고치려면 「응답 수정」이에요 — 응답 ID 는 그대로고, 새로 적은 답이 이전
+            답을 대신해요. 한 기기를 여러 명이 함께 쓰고 있다면 「추가 제출」로 이어서 낼 수
+            있어요. 단, 같은 기기에서의 추가 제출은 투표 결과 화면에 기기 중복으로 표시돼요.
           </p>
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => {
-              clearSubmitted(surveyId)
-              setDraft(emptyDraft(survey))
-              setDirection('forward')
-              setStep('intro')
-            }}
-          >
-            추가 제출
-          </button>
+
+          <div className="status-screen__choices">
+            {editable && (
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => startEditing(editable)}
+              >
+                응답 수정
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => {
+                clearSubmitted(surveyId)
+                setEditingId(null)
+                setReceiptIds([])
+                setDraft(emptyDraft(survey))
+                setDirection('forward')
+                setStep('intro')
+              }}
+            >
+              추가 제출
+            </button>
+          </div>
+
+          <ResponseReceipt
+            ids={receiptIds}
+            onEdit={receiptIds.length > 1 ? startEditing : undefined}
+          />
         </div>
       </div>
     )
@@ -786,13 +890,14 @@ export function VoteFlow() {
       <div className="vote-world">
         <div className="status-screen" ref={screenRef} tabIndex={-1}>
           <h1 className="status-screen__title">{survey.title}</h1>
-          <p className="status-screen__notice">제출했어요.</p>
+          <p className="status-screen__notice">{editingId ? '수정했어요.' : '제출했어요.'}</p>
           {duplicateIdentity && (
             <p className="status-screen__body">
               같은 이름·학번으로 낸 제출이 이미 있어서, 관리자가 한 번 더 확인해요.
             </p>
           )}
           {resultsLink}
+          <ResponseReceipt ids={receiptIds} />
         </div>
       </div>
     )
@@ -829,6 +934,20 @@ export function VoteFlow() {
             {survey.description && (
               <p className="hero__description enter-item" style={{ '--enter-index': 1 } as CSSProperties}>
                 {survey.description}
+              </p>
+            )}
+
+            {/* 수정 중이라는 사실은 표지에서 한 번 말해 둔다. 백지로 시작하는
+                화면이라 그 말이 없으면 처음 내는 것과 구별되지 않고, 다 적고
+                난 뒤 "이전 답이 사라졌다"를 처음 알게 된다. 이름·학번을
+                다시 묻는 이유도 이 줄이 함께 답한다. */}
+            {editingId && (
+              <p
+                className="hero__description enter-item"
+                style={{ '--enter-index': 2 } as CSSProperties}
+              >
+                응답을 수정하는 중이에요. 이전 답은 보여주지 않고, 지금 새로 적는 답이 그 자리를
+                대신해요. 이름·학번은 처음 낼 때와 똑같이 적어 주세요.
               </p>
             )}
             {/* 문항 수는 표지에서 말하지 않는다.
@@ -926,6 +1045,23 @@ export function VoteFlow() {
           >
             {checking ? '확인하는 중…' : '시작하기'}
           </button>
+          {/* 수정을 시작한 사람에게 되돌아갈 문을 남긴다 — 여기서 나가면
+              이전 답은 그대로다. 아직 아무것도 보내지 않았기 때문이다. */}
+          {editingId && (
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => {
+                setEditingId(null)
+                setIntroProblem(null)
+                setDraft(emptyDraft(survey))
+                setDirection('back')
+                setStep('revisit')
+              }}
+            >
+              수정 취소
+            </button>
+          )}
         </div>
 
         {/* 표지 위에 뜨는 판이다 — 별도 페이지가 아니다. 뒤의 표지는 가림막

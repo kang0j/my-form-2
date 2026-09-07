@@ -40,5 +40,10 @@
   },
   "overrides": {
     "miniflare": "5.20260831.0-alpha"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "workerd@1.20260831.1": true,
+    "workerd@1.20260815.1": true
   }
 }

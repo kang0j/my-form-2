@@ -5,7 +5,8 @@ import { validateSubmission } from '../../shared/validation'
 import { aggregateSurvey } from '../aggregate'
 import { isAllowed } from '../db/allowlist'
 import { getSurvey } from '../db/surveys'
-import { recordSubmission } from '../db/submit'
+import { findSubmissionIds } from '../db/receipts'
+import { recordSubmission, replaceSubmission } from '../db/submit'
 import { countSubmissions, getAnswerRows } from '../db/results'
 
 /**
@@ -68,6 +69,14 @@ publicRoutes.post('/surveys/:id/check', async (c) => {
   return c.json({ allowed: await isAllowed(c.env.DB, survey.id, parsed.data) })
 })
 
+/**
+ * 제출과 수정은 같은 문으로 들어온다 — 검증·허용 명단 게이트를 두 벌로
+ * 나누면 언젠가 한쪽만 고쳐진다. 갈라지는 곳은 그 둘을 다 지난 뒤 한 군데다.
+ */
+const editSchema = z.object({
+  replaces: z.string().min(1).max(64).optional(),
+})
+
 publicRoutes.post('/surveys/:id/submit', async (c) => {
   const survey = await getSurvey(c.env.DB, c.req.param('id'))
   if (!survey) return c.json({ error: '설문을 찾지 못했어요.' }, 404)
@@ -77,6 +86,16 @@ publicRoutes.post('/surveys/:id/submit', async (c) => {
   if (!parsed.success) {
     return c.json({ error: '제출 형식이 맞지 않아요.', errors: ['제출 형식이 맞지 않아요.'] }, 400)
   }
+
+  // `replaces` 는 submissionSchema 밖에 있다. 그 스키마는 "무엇을 답했는가"의
+  // 모양이고 validateSubmission 이 보는 것도 그것뿐이다 — 어느 응답을 갈아
+  // 끼우는지는 답의 일부가 아니라 이 요청의 방향이다. zod 의 object 는 모르는
+  // 키를 조용히 버리므로 원본에서 따로 읽는다.
+  const editParse = editSchema.safeParse(raw)
+  if (!editParse.success) {
+    return c.json({ error: '제출 형식이 맞지 않아요.', errors: ['제출 형식이 맞지 않아요.'] }, 400)
+  }
+  const replaces = editParse.data.replaces
 
   const validation = validateSubmission(survey, parsed.data)
   if (!validation.ok) {
@@ -92,13 +111,83 @@ publicRoutes.post('/surveys/:id/submit', async (c) => {
     return c.json({ error: message, errors: [message] }, 403)
   }
 
-  const outcome = await recordSubmission(c.env.DB, c.env.HMAC_SECRET, survey, parsed.data, {
+  const meta = {
     ip: c.req.header('CF-Connecting-IP') ?? '',
     userAgent: c.req.header('User-Agent') ?? '',
     nowMs: Date.now(),
-  })
+  }
 
-  return c.json({ ok: true, duplicateIdentity: outcome.duplicateIdentity })
+  // 응답 수정. `replaces` 가 붙어 오면 새 응답을 만들지 않고 그 응답 하나를
+  // 갈아 끼운다. 설문이 열려 있을 때만 오는데, 그 문은 위 validateSubmission
+  // 이 이미 지킨다(status !== 'open' 이면 여기까지 오지 못한다).
+  if (replaces) {
+    const result = await replaceSubmission(
+      c.env.DB,
+      c.env.HMAC_SECRET,
+      survey,
+      parsed.data,
+      meta,
+      replaces,
+    )
+
+    if (!result.ok) {
+      // 어느 문에서 막혔는지는 구분해서 말한다 — 두 경우에 사람이 할 일이
+      // 다르다. 응답 쪽이 막힌 것은 이 기기의 응답이 아니라는 뜻이라
+      // 고칠 방법이 없고(추가 제출로 가야 한다), 명부 쪽이 막힌 것은
+      // 이름·학번을 처음 낼 때와 다르게 적었다는 뜻이라 고칠 수 있다.
+      const message =
+        result.reason === 'submission'
+          ? '이 기기에서 낸 응답이 아니라 수정할 수 없어요.'
+          : '처음 낼 때 적은 이름·학번과 달라요. 그대로 적어 주세요.'
+      return c.json({ error: message, errors: [message] }, 403)
+    }
+
+    // 수정에는 신원 중복 경고를 붙이지 않는다. 명부에 줄을 더하지 않고
+    // 이미 있던 줄을 고쳐 쓰므로, 같은 이름이 두 번 세어지는 일 자체가 없다.
+    return c.json({ ok: true, duplicateIdentity: false, submissionId: result.submissionId })
+  }
+
+  const outcome = await recordSubmission(c.env.DB, c.env.HMAC_SECRET, survey, parsed.data, meta)
+
+  // 응답 ID 를 돌려준다. 낸 사람이 자기 응답에 붙은 번호를 확인할 수 있게
+  // 하는 영수증이지, 신원과의 연결이 아니다 — 이 ID 로 닿는 곳은 응답
+  // (submissions/answers)뿐이고 명부에는 이 값이 어디에도 없다.
+  return c.json({
+    ok: true,
+    duplicateIdentity: outcome.duplicateIdentity,
+    submissionId: outcome.submissionId,
+  })
+})
+
+/**
+ * 이 기기가 이 설문에 낸 응답 ID 를 되묻는다.
+ *
+ * 제출 직후에는 위 /submit 의 답에 ID 가 실려 오므로 이 경로가 필요 없다.
+ * 이 기능이 생기기 전에 낸 기기에는 "냈다"는 표시만 남아 있어서(§client/
+ * storage) ID 를 되살릴 길이 그 기기의 브라우저 키뿐이다.
+ *
+ * /check 와 같은 이유로 POST 다 — 브라우저 키를 URL 에 실으면 접근 로그·
+ * 리퍼러·히스토리에 그대로 남는다.
+ */
+const receiptSchema = z.object({
+  browserKey: z.string().min(8).max(200),
+})
+
+publicRoutes.post('/surveys/:id/receipts', async (c) => {
+  const survey = await getSurvey(c.env.DB, c.req.param('id'))
+  if (!survey) return c.json({ error: '설문을 찾지 못했어요.' }, 404)
+
+  const parsed = receiptSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) return c.json({ error: '요청 형식이 맞지 않아요.' }, 400)
+
+  return c.json({
+    submissionIds: await findSubmissionIds(
+      c.env.DB,
+      c.env.HMAC_SECRET,
+      survey.id,
+      parsed.data.browserKey,
+    ),
+  })
 })
 
 publicRoutes.get('/surveys/:id/results', async (c) => {

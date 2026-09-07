@@ -89,16 +89,25 @@ describe('GET /api/surveys/:id', () => {
 })
 
 describe('POST /api/surveys/:id/submit', () => {
-  it('제출을 받아들인다', async () => {
+  it('제출을 받아들이고 응답 ID 를 돌려준다', async () => {
     const res = await post(`/api/surveys/${survey.id}/submit`, submitBody())
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ ok: true, duplicateIdentity: false })
+
+    const body = await res.json<{ ok: boolean; duplicateIdentity: boolean; submissionId: string }>()
+    expect(body.ok).toBe(true)
+    expect(body.duplicateIdentity).toBe(false)
+    // 낸 사람이 들고 가는 영수증이다. 이 값이 없으면 완료 화면이 번호를
+    // 세울 수 없고, 응답 수정도 어느 응답을 갈아 끼울지 말할 수 없다.
+    expect(body.submissionId).toMatch(/^[0-9a-f-]{36}$/)
   })
 
   it('같은 이름·학번이 다시 오면 알려준다', async () => {
     await post(`/api/surveys/${survey.id}/submit`, submitBody())
     const res = await post(`/api/surveys/${survey.id}/submit`, submitBody())
-    expect(await res.json()).toEqual({ ok: true, duplicateIdentity: true })
+
+    const body = await res.json<{ ok: boolean; duplicateIdentity: boolean }>()
+    expect(body.ok).toBe(true)
+    expect(body.duplicateIdentity).toBe(true)
   })
 
   it('필수 문항을 비우면 400 과 사유를 돌려준다', async () => {
@@ -180,6 +189,216 @@ describe('POST /api/surveys/:id/submit', () => {
 
     const responseText = [...responseValues].join('\n')
     for (const secret of ['ZZ-HTTP-NAME', 'ZZ-HTTP-SID', 'ZZ-HTTP-BROWSER-KEY', '203.0.113.7']) {
+      expect(responseText).not.toContain(secret)
+    }
+  })
+})
+
+describe('POST /api/surveys/:id/receipts — 이 기기가 낸 응답 ID 되살리기', () => {
+  async function submissionIdsFor(browserKey: string): Promise<string[]> {
+    const res = await post(`/api/surveys/${survey.id}/receipts`, { browserKey })
+    expect(res.status).toBe(200)
+    return (await res.json<{ submissionIds: string[] }>()).submissionIds
+  }
+
+  it('이 기기가 낸 응답 ID 를 돌려준다', async () => {
+    const submitted = await post(`/api/surveys/${survey.id}/submit`, submitBody())
+    const { submissionId } = await submitted.json<{ submissionId: string }>()
+
+    expect(await submissionIdsFor('browser-key-1')).toEqual([submissionId])
+  })
+
+  it('다른 기기의 응답은 돌려주지 않는다', async () => {
+    await post(`/api/surveys/${survey.id}/submit`, submitBody())
+    expect(await submissionIdsFor('browser-key-2')).toEqual([])
+  })
+
+  // 같은 학교 와이파이를 쓰면 IP 가 겹치지만, 찾는 기준은 IP 가 아니라
+  // 브라우저 키다 — 위 post() 는 두 제출에 같은 CF-Connecting-IP 를 싣는다.
+  it('IP 가 같아도 브라우저 키가 다르면 섞이지 않는다', async () => {
+    const mine = await post(`/api/surveys/${survey.id}/submit`, submitBody())
+    await post(
+      `/api/surveys/${survey.id}/submit`,
+      submitBody({ name: '김철수', studentId: '20250002', browserKey: 'browser-key-2' }),
+    )
+
+    const { submissionId } = await mine.json<{ submissionId: string }>()
+    expect(await submissionIdsFor('browser-key-1')).toEqual([submissionId])
+  })
+
+  it('한 기기가 여러 번 냈으면 전부 돌려준다', async () => {
+    await post(`/api/surveys/${survey.id}/submit`, submitBody())
+    await post(
+      `/api/surveys/${survey.id}/submit`,
+      submitBody({ name: '김철수', studentId: '20250002' }),
+    )
+
+    expect(await submissionIdsFor('browser-key-1')).toHaveLength(2)
+  })
+
+  it('마감된 설문에서도 돌려준다 — 낸 번호는 언제든 확인할 수 있다', async () => {
+    const submitted = await post(`/api/surveys/${survey.id}/submit`, submitBody())
+    const { submissionId } = await submitted.json<{ submissionId: string }>()
+    await closeSurvey(env.DB, survey.id, NOW)
+
+    expect(await submissionIdsFor('browser-key-1')).toEqual([submissionId])
+  })
+
+  it('없는 설문은 404 다', async () => {
+    const res = await post('/api/surveys/nope/receipts', { browserKey: 'browser-key-1' })
+    expect(res.status).toBe(404)
+  })
+
+  it('형식이 깨진 본문은 400 이다', async () => {
+    const res = await post(`/api/surveys/${survey.id}/receipts`, { browserKey: 'short' })
+    expect(res.status).toBe(400)
+  })
+})
+
+describe('POST /api/surveys/:id/submit — 응답 수정(replaces)', () => {
+  const optionB = () => survey.sections[0].questions[0].options[1].id
+
+  async function submitOnce(): Promise<string> {
+    const res = await post(`/api/surveys/${survey.id}/submit`, submitBody())
+    return (await res.json<{ submissionId: string }>()).submissionId
+  }
+
+  function editBody(replaces: string, overrides: Record<string, unknown> = {}) {
+    return submitBody({
+      replaces,
+      answers: [
+        {
+          questionId: survey.sections[0].questions[0].id,
+          type: 'single',
+          optionId: optionB(),
+        },
+      ],
+      ...overrides,
+    })
+  }
+
+  it('응답 ID 는 그대로 두고 답만 갈아 끼운다', async () => {
+    const submissionId = await submitOnce()
+
+    const res = await post(`/api/surveys/${survey.id}/submit`, editBody(submissionId))
+    expect(res.status).toBe(200)
+
+    const body = await res.json<{ submissionId: string; duplicateIdentity: boolean }>()
+    expect(body.submissionId).toBe(submissionId)
+    // 명부에 줄을 더하지 않으므로 신원 중복도 아니다.
+    expect(body.duplicateIdentity).toBe(false)
+
+    const { results } = await env.DB
+      .prepare('SELECT option_id AS optionId FROM answers WHERE submission_id = ?')
+      .bind(submissionId)
+      .all<{ optionId: string }>()
+    expect(results).toEqual([{ optionId: optionB() }])
+  })
+
+  it('명부 수도 응답 수도 늘지 않는다', async () => {
+    const submissionId = await submitOnce()
+    await post(`/api/surveys/${survey.id}/submit`, editBody(submissionId))
+
+    for (const table of ['participants', 'submissions'] as const) {
+      const row = await env.DB
+        .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE survey_id = ?`)
+        .bind(survey.id)
+        .first<{ n: number }>()
+      expect(row?.n).toBe(1)
+    }
+  })
+
+  it('제출 시각이 갱신된다', async () => {
+    const submissionId = await submitOnce()
+    const before = await env.DB
+      .prepare('SELECT submitted_at AS at FROM participants WHERE survey_id = ?')
+      .bind(survey.id)
+      .first<{ at: number }>()
+
+    await post(`/api/surveys/${survey.id}/submit`, editBody(submissionId))
+
+    const after = await env.DB
+      .prepare('SELECT submitted_at AS at FROM participants WHERE survey_id = ?')
+      .bind(survey.id)
+      .first<{ at: number }>()
+    expect(after!.at).toBeGreaterThanOrEqual(before!.at)
+  })
+
+  it('다른 기기의 응답은 고칠 수 없다', async () => {
+    const submissionId = await submitOnce()
+
+    const res = await post(
+      `/api/surveys/${survey.id}/submit`,
+      editBody(submissionId, { browserKey: 'browser-key-2' }),
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('명부에 없는 이름·학번으로는 고칠 수 없다', async () => {
+    const submissionId = await submitOnce()
+
+    const res = await post(
+      `/api/surveys/${survey.id}/submit`,
+      editBody(submissionId, { name: '없는사람', studentId: '00000000' }),
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it('없는 응답 ID 는 고칠 수 없다', async () => {
+    await submitOnce()
+    const res = await post(`/api/surveys/${survey.id}/submit`, editBody('없는-응답-id'))
+    expect(res.status).toBe(403)
+  })
+
+  // 수정도 제출이라 같은 문을 지난다 — 마감된 설문의 문은 닫혀 있다.
+  it('마감된 설문에서는 고칠 수 없다', async () => {
+    const submissionId = await submitOnce()
+    await closeSurvey(env.DB, survey.id, NOW)
+
+    const res = await post(`/api/surveys/${survey.id}/submit`, editBody(submissionId))
+    expect(res.status).toBe(400)
+  })
+
+  it('수정한 뒤에도 명부 값과 응답 값은 이어지지 않는다', async () => {
+    const res = await post(`/api/surveys/${survey.id}/submit`, {
+      name: 'ZZ-EDIT-NAME',
+      studentId: 'ZZ-EDIT-SID',
+      browserKey: 'ZZ-EDIT-BROWSER-KEY',
+      answers: [
+        {
+          questionId: survey.sections[0].questions[0].id,
+          type: 'single',
+          optionId: survey.sections[0].questions[0].options[0].id,
+        },
+      ],
+    })
+    const { submissionId } = await res.json<{ submissionId: string }>()
+
+    await post(`/api/surveys/${survey.id}/submit`, {
+      name: 'ZZ-EDIT-NAME',
+      studentId: 'ZZ-EDIT-SID',
+      browserKey: 'ZZ-EDIT-BROWSER-KEY',
+      replaces: submissionId,
+      answers: [
+        { questionId: survey.sections[0].questions[0].id, type: 'single', optionId: optionB() },
+      ],
+    })
+
+    const { results: responseRows } = await env.DB
+      .prepare(
+        `SELECT s.*, a.* FROM submissions s
+         LEFT JOIN answers a ON a.submission_id = s.id
+         WHERE s.survey_id = ?`,
+      )
+      .bind(survey.id)
+      .all<Record<string, unknown>>()
+
+    const responseText = responseRows
+      .flatMap((row) => Object.values(row))
+      .filter((v) => v !== null && v !== undefined)
+      .join('\n')
+
+    for (const secret of ['ZZ-EDIT-NAME', 'ZZ-EDIT-SID', 'ZZ-EDIT-BROWSER-KEY', '203.0.113.7']) {
       expect(responseText).not.toContain(secret)
     }
   })

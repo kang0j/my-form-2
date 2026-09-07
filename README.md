@@ -70,8 +70,26 @@ locked until you fill in both values and redeploy.
   and polling a live API would restore it. The answers CSV is under the same lock.
 - Each survey chooses who sees results after closing: admins only, or everyone.
 - Submitting again under the same identity shows a notice on the completion screen;
-  revisiting from the same browser shows "You already submitted" with an
-  [Submit again] button.
+  revisiting from the same browser shows "You already submitted" with [Edit response]
+  and [Submit again] buttons.
+- **Each respondent sees their own response ID** — the same value as the first column of
+  the answers CSV. It sits small and muted at the bottom of the completion, revisit, and
+  closed screens (open or closed, it always shows), truncated to the first 8 characters
+  and expanded in full on tap. The ID is stored per survey in that browser's
+  `localStorage`, and a device that submitted before this feature existed recovers it by
+  asking `POST /api/surveys/:id/receipts` with its browser key — the lookup keys on
+  `browser_key_hash` only, so devices sharing an IP never see each other's IDs. A device
+  whose site data was cleared (or that submitted from a private window) has no key left
+  and simply shows nothing.
+- **[Edit response] replaces answers in place, only while the survey is open.** The
+  response ID does not change and no new roster line is added; the answers under that ID
+  are replaced and the roster's submitted time is refreshed. The edit screen starts
+  blank on purpose — previous answers are never shown back, so a shared device cannot
+  leak the last person's answers. The name and student ID have to be typed the same as
+  the first time, because the server refreshes the roster line for the identity you
+  type. It never compares that identity against the submission being edited: doing so
+  would turn this route into an oracle for "whose response is this?" and break the
+  roster/response separation.
 - Answers and participants can each be downloaded as CSV (the answers CSV only after
   closing).
 
@@ -130,7 +148,11 @@ do them. Run them in order.
       tally under the results tab.
    5. Reopen it, submit again with the same name and student ID, and confirm both the
       notice on the completion screen and the duplicate identity entry in the audit tab.
-   6. Revisit from the same window and confirm "You already submitted" and the
-      [Submit again] button.
-   7. Download the answers CSV and the roster CSV and confirm Korean text is not
-      mangled in Excel.
+   6. Revisit from the same window and confirm "You already submitted" with both the
+      [Edit response] and [Submit again] buttons, and that the response ID at the bottom
+      expands to its full value on tap.
+   7. Press [Edit response], answer differently, and confirm the completion screen says
+      "Edited" with the same response ID as before.
+   8. Download the answers CSV and the roster CSV and confirm Korean text is not
+      mangled in Excel, that the edited row carries the new answers under the same
+      response ID, and that the roster still has one line per response.

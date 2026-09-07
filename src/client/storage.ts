@@ -107,9 +107,43 @@ export function hasSubmitted(surveyId: string): boolean {
   }
 }
 
-export function markSubmitted(surveyId: string): void {
+/**
+ * 이 기기가 이 설문에 낸 응답 ID.
+ *
+ * 제출 표시는 오래 전부터 `'1'` 한 글자였다. 그 값이 남아 있는 기기는 낸
+ * 것은 맞지만 ID 를 적어 두지 않은 상태라서 빈 배열이다 — 그때는 서버에
+ * 되물어 되살린다(§rememberSubmittedIds, /receipts). 새 값은 ID 배열이고,
+ * `JSON.parse('1')` 은 배열이 아니므로 옛 값과 저절로 갈린다.
+ */
+export function submittedIds(surveyId: string): string[] {
   try {
-    localStorage.setItem(submittedKey(surveyId), '1')
+    const raw = localStorage.getItem(submittedKey(surveyId))
+    if (raw === null) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((id): id is string => typeof id === 'string')
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 제출했다고 표시하면서 그 응답 ID 를 함께 적어 둔다.
+ *
+ * ID 없이 부를 수도 있다 — 서버가 옛 형식으로 답해 ID 가 없는 경우에도
+ * "냈다"는 사실은 남아야 재방문 화면이 선다.
+ */
+export function markSubmitted(surveyId: string, submissionId?: string): void {
+  rememberSubmittedIds(surveyId, submissionId ? [submissionId] : [])
+}
+
+/**
+ * 되살린 응답 ID 목록을 기기에 적어 둔다. 다음 재접속부터는 서버에 다시
+ * 묻지 않는다.
+ */
+export function rememberSubmittedIds(surveyId: string, ids: string[]): void {
+  try {
+    localStorage.setItem(submittedKey(surveyId), JSON.stringify(ids))
   } catch {
     // 무시
   }

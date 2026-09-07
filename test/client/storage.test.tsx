@@ -7,7 +7,9 @@ import {
   hasSubmitted,
   loadDraft,
   markSubmitted,
+  rememberSubmittedIds,
   saveDraft,
+  submittedIds,
 } from '../../src/client/storage'
 
 beforeEach(() => {
@@ -145,6 +147,16 @@ describe('localStorage 자체가 막혀 있을 때 (시크릿 창·사이트 데
     expect(() => clearSubmitted('s1')).not.toThrow()
   })
 
+  it('submittedIds 는 빈 목록으로 낮춘다', () => {
+    stubThrowingLocalStorage()
+    expect(submittedIds('s1')).toEqual([])
+  })
+
+  it('rememberSubmittedIds 는 예외를 밖으로 던지지 않는다', () => {
+    stubThrowingLocalStorage()
+    expect(() => rememberSubmittedIds('s1', ['sub-1'])).not.toThrow()
+  })
+
   it('getBrowserKey 는 매번 새 키를 만들어서라도 값을 돌려준다', () => {
     stubThrowingLocalStorage()
     const key = getBrowserKey()
@@ -173,5 +185,56 @@ describe('제출 표시', () => {
     markSubmitted('s1')
     clearSubmitted('s1')
     expect(hasSubmitted('s1')).toBe(false)
+  })
+})
+
+describe('응답 ID (영수증)', () => {
+  it('제출할 때 함께 적어 둔다', () => {
+    markSubmitted('s1', 'sub-1')
+    expect(submittedIds('s1')).toEqual(['sub-1'])
+  })
+
+  it('설문마다 따로 적힌다', () => {
+    markSubmitted('s1', 'sub-1')
+    markSubmitted('s2', 'sub-2')
+    expect(submittedIds('s1')).toEqual(['sub-1'])
+    expect(submittedIds('s2')).toEqual(['sub-2'])
+  })
+
+  it('낸 적이 없으면 빈 목록이다', () => {
+    expect(submittedIds('s1')).toEqual([])
+  })
+
+  // 이 기능이 생기기 전의 표시는 '1' 한 글자였다. 그 기기는 "냈다"는 사실은
+  // 남아 있지만 번호는 모르는 상태이고, 그때만 서버에 되묻는다(§/receipts).
+  it("옛 표시('1')는 냈다고는 하되 번호는 없다", () => {
+    localStorage.setItem('anonymous-vote:submitted:s1', '1')
+    expect(hasSubmitted('s1')).toBe(true)
+    expect(submittedIds('s1')).toEqual([])
+  })
+
+  it('되살린 목록을 적어 두면 다음부터는 그대로 읽힌다', () => {
+    localStorage.setItem('anonymous-vote:submitted:s1', '1')
+    rememberSubmittedIds('s1', ['sub-1', 'sub-2'])
+    expect(submittedIds('s1')).toEqual(['sub-1', 'sub-2'])
+  })
+
+  it('ID 없이 표시해도 냈다는 사실은 남는다', () => {
+    markSubmitted('s1')
+    expect(hasSubmitted('s1')).toBe(true)
+    expect(submittedIds('s1')).toEqual([])
+  })
+
+  it('깨진 값이 들어 있어도 빈 목록으로 낮춘다', () => {
+    localStorage.setItem('anonymous-vote:submitted:s1', '{깨진 JSON')
+    expect(submittedIds('s1')).toEqual([])
+  })
+
+  it('추가 제출로 표시를 지우면 번호도 함께 사라진다', () => {
+    // 공용 기기를 다음 사람에게 넘기는 자리다 — 앞사람의 번호가 남아 있으면
+    // 다음 사람 화면에 그대로 선다.
+    markSubmitted('s1', 'sub-1')
+    clearSubmitted('s1')
+    expect(submittedIds('s1')).toEqual([])
   })
 })

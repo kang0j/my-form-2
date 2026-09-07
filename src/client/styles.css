@@ -1490,6 +1490,102 @@ button.primary:disabled {
   font-weight: 600;
 }
 
+/* 재방문 화면의 두 갈래(「응답 수정」·「추가 제출」). .action-bar 가 아니다 —
+   이 둘은 화면 아래 고정 바가 아니라 본문 흐름 안의 선택지다. 세로로 쌓는
+   것은 라벨 길이가 서로 달라 가로로 놓으면 폭이 어긋나 보이기 때문이고,
+   좁은 화면에서는 어차피 두 줄이 된다. */
+.status-screen__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+/* 응답 ID(영수증). 화면의 주인공이 아니라 참조값이라, 작고 흐리게 아래
+   구석에 앉는다.
+
+   margin-top: auto 가 자리를 정한다. .status-screen 은 justify-content:
+   center 인 세로 flex 인데, auto 마진은 justify-content 보다 먼저 남은
+   공간을 가져간다 — 본문은 가운데 그대로 있고 이 줄만 바닥으로 내려간다.
+
+   색은 --ink-secondary 다. 이 세계의 텍스트용 불투명도는 한 단계뿐이므로
+   (§'회색 금지') 더 흐린 잉크를 새로 만들지 않고, 작기(--fs-small)로
+   위계를 낮춘다. */
+.receipt {
+  margin: var(--space-7) 0 0;
+  padding: 0;
+  font-size: var(--fs-small);
+  color: var(--ink-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.receipt__label {
+  /* 라벨은 값보다 한 뼘 더 뒤로 물러난다 — 굵기로만 가른다. */
+  font-weight: 400;
+}
+
+.receipt__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+/* 눌러서 펴는 버튼이지만 버튼처럼 생기지 않는다 — 이 줄에 칠이나 테두리가
+   붙으면 작게 두려던 것이 도로 눈에 띈다. 누를 수 있다는 사실은 밑줄이
+   말한다. */
+.receipt__code {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: inherit;
+  font-weight: 600;
+  color: inherit;
+  /* UUID 는 16진수와 하이픈이 붙어 흐르는 문자열이라 자간을 조금 벌려야
+     자기 번호를 눈으로 대조할 수 있다. 등폭 서체를 새로 들이지 않는 것은
+     이 세계의 서체가 하나뿐이기 때문이다(§웹폰트). */
+  letter-spacing: 0.06em;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+  cursor: pointer;
+  /* 접힌 8자리와 펼친 36자리 사이를 오갈 때 줄이 통째로 접힐 수 있다. */
+  word-break: break-all;
+  text-align: left;
+}
+
+.receipt__code:hover,
+.receipt__code:focus-visible {
+  color: var(--ink);
+}
+
+/* 여러 응답이 남아 있는 기기에서만 선다. 같은 줄의 곁가지라 버튼 모양을
+   내지 않는다 — 이 줄에서 주인공은 번호다. */
+.receipt__edit {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: inherit;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.receipt__edit:hover,
+.receipt__edit:focus-visible {
+  color: var(--ink);
+}
+
 @media (min-width: 48rem) {
   .status-row,
   .screen,

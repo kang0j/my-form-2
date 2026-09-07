@@ -182,11 +182,18 @@ let submitBody: Record<string, unknown> | null = null
 let fetchMock: ReturnType<typeof vi.fn> | null = null
 
 let checkBody: Record<string, unknown> | null = null
+let receiptsBody: Record<string, unknown> | null = null
 
-// POST 가 두 종류가 됐다: 표지의 허용 명단 조회(/check)와 제출(/submit).
-// URL 로 갈라야 「시작하기」 한 번이 제출로 세어지지 않는다.
+// POST 가 세 종류다: 표지의 허용 명단 조회(/check), 이 기기가 낸 응답 ID 를
+// 되묻는 조회(/receipts), 그리고 제출(/submit). URL 로 갈라야 「시작하기」
+// 한 번이나 영수증 되살리기 한 번이 제출로 세어지지 않는다.
 function mockFetch(
-  overrides: { survey?: unknown; submit?: unknown; check?: unknown } = {},
+  overrides: {
+    survey?: unknown
+    submit?: unknown
+    check?: unknown
+    receipts?: unknown
+  } = {},
 ) {
   fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (init?.method === 'POST' && url.endsWith('/check')) {
@@ -196,10 +203,23 @@ function mockFetch(
         headers: { 'Content-Type': 'application/json' },
       })
     }
+    if (init?.method === 'POST' && url.endsWith('/receipts')) {
+      receiptsBody = JSON.parse(String(init.body))
+      return new Response(JSON.stringify(overrides.receipts ?? { submissionIds: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
     if (init?.method === 'POST') {
       submitBody = JSON.parse(String(init.body))
       return new Response(
-        JSON.stringify(overrides.submit ?? { ok: true, duplicateIdentity: false }),
+        JSON.stringify(
+          overrides.submit ?? {
+            ok: true,
+            duplicateIdentity: false,
+            submissionId: '11112222-3333-4444-5555-666677778888',
+          },
+        ),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       )
     }
@@ -214,7 +234,9 @@ function mockFetch(
 function postCallCount(): number {
   return fetchMock!.mock.calls.filter(
     ([url, init]) =>
-      (init as RequestInit | undefined)?.method === 'POST' && !String(url).endsWith('/check'),
+      (init as RequestInit | undefined)?.method === 'POST' &&
+      !String(url).endsWith('/check') &&
+      !String(url).endsWith('/receipts'),
   ).length
 }
 
@@ -232,6 +254,7 @@ beforeEach(() => {
   localStorage.clear()
   submitBody = null
   checkBody = null
+  receiptsBody = null
 })
 
 afterEach(() => {
@@ -816,6 +839,275 @@ describe('재방문', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: '추가 제출' }))
     expect(screen.getByLabelText('이름')).toBeInTheDocument()
+  })
+})
+
+const RECEIPT = '11112222-3333-4444-5555-666677778888'
+const RECEIPT_HEAD = '11112222…'
+
+/** 이 기기가 이미 제출했고, 그 응답 ID 도 적혀 있는 상태로 만든다. */
+function markSubmittedWith(...ids: string[]) {
+  localStorage.setItem('anonymous-vote:submitted:s1', JSON.stringify(ids))
+}
+
+describe('응답 ID (영수증)', () => {
+  async function startVoting() {
+    await screen.findByText('동아리 회장 선거')
+    await userEvent.type(screen.getByLabelText('이름'), '홍길동')
+    await userEvent.type(screen.getByLabelText('학번'), '20250001')
+    await pressStart()
+  }
+
+  it('제출한 뒤 완료 화면에 앞 8자리가 뜬다', async () => {
+    mockFetch()
+    renderFlow()
+    await startVoting()
+    await userEvent.click(screen.getByLabelText('후보 A'))
+    await userEvent.click(screen.getByRole('button', { name: '제출하기' }))
+
+    expect(await screen.findByText('제출했어요.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: new RegExp(RECEIPT_HEAD) })).toBeInTheDocument()
+    // 앞 8자리만 보인다 — 전체는 아직 화면에 없다.
+    expect(screen.queryByText(RECEIPT)).not.toBeInTheDocument()
+  })
+
+  it('누르면 전체가 펴지고 다시 누르면 접힌다', async () => {
+    mockFetch()
+    renderFlow()
+    await startVoting()
+    await userEvent.click(screen.getByLabelText('후보 A'))
+    await userEvent.click(screen.getByRole('button', { name: '제출하기' }))
+
+    const code = await screen.findByRole('button', { name: new RegExp(RECEIPT_HEAD) })
+    expect(code).toHaveAttribute('aria-expanded', 'false')
+
+    await userEvent.click(code)
+    expect(screen.getByRole('button', { name: new RegExp(RECEIPT) })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: new RegExp(RECEIPT) }))
+    expect(screen.getByRole('button', { name: new RegExp(RECEIPT_HEAD) })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+  })
+
+  it('제출하면 응답 ID 가 기기에 적힌다', async () => {
+    mockFetch()
+    renderFlow()
+    await startVoting()
+    await userEvent.click(screen.getByLabelText('후보 A'))
+    await userEvent.click(screen.getByRole('button', { name: '제출하기' }))
+    await screen.findByText('제출했어요.')
+
+    expect(JSON.parse(localStorage.getItem('anonymous-vote:submitted:s1')!)).toEqual([RECEIPT])
+  })
+
+  it('재방문 화면에도 뜬다', async () => {
+    markSubmittedWith(RECEIPT)
+    mockFetch()
+    renderFlow()
+
+    await screen.findByText('이미 제출했어요.')
+    expect(screen.getByRole('button', { name: new RegExp(RECEIPT_HEAD) })).toBeInTheDocument()
+  })
+
+  // 열림/마감과 무관하게 자기가 낸 번호는 확인할 수 있어야 한다.
+  it('마감된 설문에서도 뜬다', async () => {
+    markSubmittedWith(RECEIPT)
+    mockFetch({ survey: { ...survey, status: 'closed', sections: [], resultsAvailable: true } })
+    renderFlow()
+
+    await screen.findByText('마감된 설문이에요.')
+    expect(screen.getByRole('button', { name: new RegExp(RECEIPT_HEAD) })).toBeInTheDocument()
+  })
+
+  it('낸 적이 없으면 아무 번호도 세우지 않는다', async () => {
+    mockFetch({ survey: { ...survey, status: 'closed', sections: [], resultsAvailable: true } })
+    renderFlow()
+
+    await screen.findByText('마감된 설문이에요.')
+    expect(screen.queryByText('응답 ID')).not.toBeInTheDocument()
+  })
+
+  // 이 기능이 생기기 전에 낸 기기 — 표시만 '1' 이고 번호가 없다.
+  it("옛 표시('1')만 있으면 서버에 되물어 되살린다", async () => {
+    localStorage.setItem('anonymous-vote:submitted:s1', '1')
+    mockFetch({ receipts: { submissionIds: [RECEIPT] } })
+    renderFlow()
+
+    expect(
+      await screen.findByRole('button', { name: new RegExp(RECEIPT_HEAD) }),
+    ).toBeInTheDocument()
+    // 되묻는 열쇠는 IP 가 아니라 이 기기의 브라우저 키다.
+    expect(String(receiptsBody!.browserKey)).toMatch(/^[0-9a-f-]{36}$/)
+    // 다음 재접속부터는 다시 묻지 않도록 적어 둔다.
+    expect(JSON.parse(localStorage.getItem('anonymous-vote:submitted:s1')!)).toEqual([RECEIPT])
+  })
+
+  it('기기에 번호가 적혀 있으면 서버에 되묻지 않는다', async () => {
+    markSubmittedWith(RECEIPT)
+    mockFetch()
+    renderFlow()
+
+    await screen.findByText('이미 제출했어요.')
+    expect(receiptsBody).toBeNull()
+  })
+
+  it('되살리기가 실패해도 화면은 그대로 선다', async () => {
+    localStorage.setItem('anonymous-vote:submitted:s1', '1')
+    fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && String(url).endsWith('/receipts')) {
+        return new Response(JSON.stringify({ error: '안 돼요.' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify(survey), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderFlow()
+
+    expect(await screen.findByText('이미 제출했어요.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '추가 제출' })).toBeInTheDocument()
+  })
+})
+
+describe('응답 수정', () => {
+  async function openEditor() {
+    markSubmittedWith(RECEIPT)
+    mockFetch()
+    renderFlow()
+    await userEvent.click(await screen.findByRole('button', { name: '응답 수정' }))
+  }
+
+  it('재방문 화면에 「응답 수정」과 「추가 제출」 두 갈래가 선다', async () => {
+    markSubmittedWith(RECEIPT)
+    mockFetch()
+    renderFlow()
+
+    await screen.findByText('이미 제출했어요.')
+    expect(screen.getByRole('button', { name: '응답 수정' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '추가 제출' })).toBeInTheDocument()
+  })
+
+  // 열려 있을 때만 고칠 수 있다 — 마감 화면에는 이 갈래가 아예 없다.
+  it('마감된 설문에는 「응답 수정」이 없다', async () => {
+    markSubmittedWith(RECEIPT)
+    mockFetch({ survey: { ...survey, status: 'closed', sections: [], resultsAvailable: true } })
+    renderFlow()
+
+    await screen.findByText('마감된 설문이에요.')
+    expect(screen.queryByRole('button', { name: '응답 수정' })).not.toBeInTheDocument()
+  })
+
+  it('번호를 모르는 기기에는 「응답 수정」이 없다', async () => {
+    localStorage.setItem('anonymous-vote:submitted:s1', '1')
+    mockFetch()
+    renderFlow()
+
+    await screen.findByText('이미 제출했어요.')
+    expect(screen.queryByRole('button', { name: '응답 수정' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '추가 제출' })).toBeInTheDocument()
+  })
+
+  it('백지에서 새로 적는다 — 이전 답도 남은 초안도 채워 두지 않는다', async () => {
+    localStorage.setItem(
+      'anonymous-vote:draft:s1',
+      JSON.stringify({ single: { q1: 'o1' }, multi: {}, other: {}, text: {}, ranking: {} }),
+    )
+    await openEditor()
+
+    expect(screen.getByLabelText('이름')).toHaveValue('')
+    expect(screen.getByLabelText('학번')).toHaveValue('')
+
+    await userEvent.type(screen.getByLabelText('이름'), '홍길동')
+    await userEvent.type(screen.getByLabelText('학번'), '20250001')
+    await pressStart()
+
+    expect(screen.getByLabelText('후보 A')).not.toBeChecked()
+  })
+
+  it('제출할 때 어느 응답을 갈아 끼우는지 함께 보낸다', async () => {
+    await openEditor()
+    await userEvent.type(screen.getByLabelText('이름'), '홍길동')
+    await userEvent.type(screen.getByLabelText('학번'), '20250001')
+    await pressStart()
+    await userEvent.click(screen.getByLabelText('후보 B'))
+    await userEvent.click(screen.getByRole('button', { name: '제출하기' }))
+
+    await waitFor(() => expect(submitBody).not.toBeNull())
+    expect(submitBody!.replaces).toBe(RECEIPT)
+    expect(submitBody!.answers).toEqual([{ questionId: 'q1', type: 'single', optionId: 'o2' }])
+  })
+
+  it('완료 화면은 「수정했어요」이고 응답 ID 는 그대로다', async () => {
+    await openEditor()
+    await userEvent.type(screen.getByLabelText('이름'), '홍길동')
+    await userEvent.type(screen.getByLabelText('학번'), '20250001')
+    await pressStart()
+    await userEvent.click(screen.getByLabelText('후보 B'))
+    await userEvent.click(screen.getByRole('button', { name: '제출하기' }))
+
+    expect(await screen.findByText('수정했어요.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: new RegExp(RECEIPT_HEAD) })).toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem('anonymous-vote:submitted:s1')!)).toEqual([RECEIPT])
+  })
+
+  it('「수정 취소」는 재방문 화면으로 되돌린다', async () => {
+    await openEditor()
+    await userEvent.click(screen.getByRole('button', { name: '수정 취소' }))
+
+    expect(screen.getByText('이미 제출했어요.')).toBeInTheDocument()
+    expect(submitBody).toBeNull()
+  })
+
+  // 추가 제출은 수정이 아니다 — 앞사람의 번호도 함께 내려놓고 새로 낸다.
+  it('추가 제출은 replaces 없이 나가고 앞 번호를 지운다', async () => {
+    markSubmittedWith(RECEIPT)
+    mockFetch()
+    renderFlow()
+
+    await userEvent.click(await screen.findByRole('button', { name: '추가 제출' }))
+    expect(screen.queryByRole('button', { name: new RegExp(RECEIPT_HEAD) })).not.toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('이름'), '김철수')
+    await userEvent.type(screen.getByLabelText('학번'), '20250002')
+    await pressStart()
+    await userEvent.click(screen.getByLabelText('후보 A'))
+    await userEvent.click(screen.getByRole('button', { name: '제출하기' }))
+
+    await waitFor(() => expect(submitBody).not.toBeNull())
+    expect(submitBody!.replaces).toBeUndefined()
+  })
+
+  it('여러 응답이 남은 기기에서는 어느 것을 고칠지 고르게 한다', async () => {
+    const other = '99998888-7777-6666-5555-444433332222'
+    markSubmittedWith(RECEIPT, other)
+    mockFetch()
+    renderFlow()
+
+    await screen.findByText('이미 제출했어요.')
+    // 하나로 정해지지 않으므로 버튼 자리에는 서지 않는다.
+    expect(screen.queryByRole('button', { name: '응답 수정' })).not.toBeInTheDocument()
+
+    const picks = screen.getAllByRole('button', { name: '수정' })
+    expect(picks).toHaveLength(2)
+
+    await userEvent.click(picks[1])
+    await userEvent.type(screen.getByLabelText('이름'), '홍길동')
+    await userEvent.type(screen.getByLabelText('학번'), '20250001')
+    await pressStart()
+    await userEvent.click(screen.getByLabelText('후보 B'))
+    await userEvent.click(screen.getByRole('button', { name: '제출하기' }))
+
+    await waitFor(() => expect(submitBody).not.toBeNull())
+    expect(submitBody!.replaces).toBe(other)
   })
 })
 
